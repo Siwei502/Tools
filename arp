@@ -1,0 +1,55 @@
+
+from scapy.all import *
+
+
+current_arp_table ={}
+
+def get_arp_table(pkts):
+	arp_table = {}
+	for p in pkts:
+ 		if p.haslayer(ARP):
+			arp = p[ARP]
+			arp_table[arp.psrc] = arp.hwsrc
+
+		return arp_table
+
+def detect(old_table, new_table):
+	changes = []
+	for ip, mac in new_table.items():
+		if ip in old_table:
+			if old_table[ip] != mac:
+				changes.append((ip, old_table[ip], mac))
+		else:
+			changes.append((ip, 'new', mac))
+	for ip in old_table:
+		if ip not in new_table:
+			changes.append((ip, old_table[ip], 'removed'))
+	return changes
+
+def capture_live_packets(duration=10):
+	print "start capture packets, duration: {duration} sec..."% duration
+	packets = sniff(timeout=duration)
+	return packets
+
+def main():
+	pkts = rdpcap('capture.pcapng')
+	old_arp_table = get_arp_table(pkts)
+
+	live_pkts = capture_live_packets(duration=30)
+	current_arp_table = get_arp_table(live_pkts)
+
+	
+	changes = detect(old_arp_table, current_arp_table)
+
+	if changes:
+		print("ARP table changes detected: ")
+		for change_detected in changes:
+			ip, old_mac, new_mac = change_detected
+			print("IP: {}, Old MAC: {}, New MAC: {}".format(ip, old_mac, new_mac))
+	else:
+		print("No changes detected in ARP table.")
+
+if __name__ == "__main__":
+	main()
+
+
